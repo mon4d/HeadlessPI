@@ -34,7 +34,7 @@ if [ -f "$CONFIG_PATH" ]; then
         printf '\nWIFI_PASSWORD="YOUR_WIFI_PASSWORD"\n' >> "$append_tmp"
         ;;
       PROJECT_REPO)
-        printf "\n# Default project-repo from internal config, can be overridden here:\nPROJECT_REPO=\"%s\"\n" "$PROJECT_REPO" >> "$append_tmp"
+        printf "\n# Default project-repo from internal config, can be overridden here:\nPROJECT_REPO=%s\n" "$PROJECT_REPO" >> "$append_tmp"
         ;;
     esac
   done

@@ -67,7 +67,15 @@ if [ ${#missing[@]} -ne 0 ]; then
 fi
 
 # Basic validation for project repo URL
-if [[ "$PROJECT_REPO" =~ ^(https://|git@|ssh://|git://) ]]; then
+# normalize by removing any surrounding single or double quotes that may remain
+project_repo_clean="$PROJECT_REPO"
+project_repo_clean="${project_repo_clean%\"}"
+project_repo_clean="${project_repo_clean#\"}"
+project_repo_clean="${project_repo_clean%\'}"
+project_repo_clean="${project_repo_clean#\'}"
+
+# validate using grep -E for portability and clarity
+if printf '%s' "$project_repo_clean" | grep -E -q '^(https://|git@|ssh://|git://)'; then
   repo_ok=0
 else
   repo_ok=1
