@@ -9,7 +9,9 @@ fi
 # startup.sh - Steuerungs-Skript, wird beim Boot ausgeführt
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "\nStarting HeadlessPI startup sequence..."
+echo ""
+echo " - - - - - - - - - - - - - - - - - - - "
+echo "Starting HeadlessPI startup sequence..."
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # First: Read the internal config file at $SCRIPTDIR/internal.config and write default values to environment variables

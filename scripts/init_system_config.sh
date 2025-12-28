@@ -28,13 +28,14 @@ if [ -f "$CONFIG_PATH" ]; then
   for k in "${missing_keys[@]}"; do
     case "$k" in
       WIFI_UUID)
-        printf '\n# Default WIFI_UUID (replace)\nWIFI_UUID="YOUR_WIFI_SSID_OR_UUID"\n' >> "$append_tmp"
+        printf '\nWIFI_UUID="YOUR_WIFI_SSID_OR_UUID"\n' >> "$append_tmp"
         ;;
       WIFI_PASSWORD)
-        printf '\n# Default WIFI_PASSWORD (replace)\nWIFI_PASSWORD="YOUR_WIFI_PASSWORD"\n' >> "$append_tmp"
+        printf '\nWIFI_PASSWORD="YOUR_WIFI_PASSWORD"\n' >> "$append_tmp"
         ;;
       PROJECT_REPO)
-        printf '\n# Default PROJECT_REPO (replace)\nPROJECT_REPO="https://github.com/mon4d/example-project.git"\n' >> "$append_tmp"
+        repo_escaped="${PROJECT_REPO//\"/\\\"}"
+        printf "\n# Default project-repo from internal config, can be overridden here:\nPROJECT_REPO=\"%s\"\n" "$repo_escaped" >> "$append_tmp"
         ;;
     esac
   done

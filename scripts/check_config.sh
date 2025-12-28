@@ -63,7 +63,7 @@ if [ ${#missing[@]} -ne 0 ]; then
 fi
 
 # Basic validation for project repo URL
-if [[ "$PROJECT_REPO" =~ ^(https?://|git@|ssh://|git://) ]]; then
+if [[ "$PROJECT_REPO" =~ ^(https://|git@|ssh://|git://) ]]; then
   repo_ok=0
 else
   repo_ok=1
