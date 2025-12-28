@@ -28,6 +28,10 @@ while IFS= read -r _line || [ -n "$_line" ]; do
   if [[ $line =~ ^([A-Za-z_][A-Za-z0-9_-]*)=(.*)$ ]]; then
     key="${BASH_REMATCH[1]}"
     val="${BASH_REMATCH[2]}"
+    # trim whitespace around the value
+    val="$(echo "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    # remove DOS CR if present
+    val="${val//$'\r'/}"
     # strip surrounding quotes if present
     if [[ $val =~ ^"(.*)"$ ]]; then
       val="${BASH_REMATCH[1]}"
@@ -36,13 +40,13 @@ while IFS= read -r _line || [ -n "$_line" ]; do
     fi
 
     case "$key" in
-      WIFI_UUID)
+      WIFI_UUID|wifi_uuid)
         WIFI_UUID="$val"
         ;;
-      WIFI_PASSWORD)
+      WIFI_PASSWORD|wifi_password)
         WIFI_PASSWORD="$val"
         ;;
-      PROJECT_REPO)
+      PROJECT_REPO|project-repo|project_repo)
         PROJECT_REPO="$val"
         ;;
       *)
