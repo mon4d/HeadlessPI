@@ -70,17 +70,17 @@ else
 fi
 
 if [ $repo_ok -ne 0 ]; then
-  echo "ERROR: 'project-repo' does not look like a valid URL/git repository: $PROJECT_REPO" >&2
+  echo "ERROR: 'PROJECT_REPO' does not look like a valid URL/git repository: $PROJECT_REPO" >&2
   exit 3
 fi
 
 # Optional: warn if password is short
 if [ ${#WIFI_PASSWORD} -lt 8 ]; then
-  echo "WARNING: wifi_password seems short (<8 chars)."
+  echo "WARNING: WIFI_PASSWORD seems short (<8 chars)."
 fi
 
 echo "Config OK. Summary:"
-echo "  wifi_uuid=[$WIFI_UUID]"
-echo "  project-repo=[$PROJECT_REPO]"
+echo "  WIFI_UUID=[$WIFI_UUID]"
+echo "  PROJECT_REPO=[$PROJECT_REPO]"
 
 exit 0
