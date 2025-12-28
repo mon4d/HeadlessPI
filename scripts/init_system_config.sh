@@ -10,7 +10,7 @@ if [ -f "$CONFIG_PATH" ]; then
   echo "Config file already exists at '$CONFIG_PATH'. Checking for missing keys..."
 
   missing_keys=()
-  for key in wifi_uuid wifi_password project-repo; do
+  for key in WIFI_UUID WIFI_PASSWORD PROJECT_REPO; do
     if ! grep -qE "^[[:space:]]*${key}=" "$CONFIG_PATH"; then
       missing_keys+=("$key")
     fi
@@ -27,14 +27,14 @@ if [ -f "$CONFIG_PATH" ]; then
 
   for k in "${missing_keys[@]}"; do
     case "$k" in
-      wifi_uuid)
-        printf '\n# Default wifi_uuid (replace)\nwifi_uuid="YOUR_WIFI_SSID_OR_UUID"\n' >> "$append_tmp"
+      WIFI_UUID)
+        printf '\n# Default WIFI_UUID (replace)\nWIFI_UUID="YOUR_WIFI_SSID_OR_UUID"\n' >> "$append_tmp"
         ;;
-      wifi_password)
-        printf '\n# Default wifi_password (replace)\nwifi_password="YOUR_WIFI_PASSWORD"\n' >> "$append_tmp"
+      WIFI_PASSWORD)
+        printf '\n# Default WIFI_PASSWORD (replace)\nWIFI_PASSWORD="YOUR_WIFI_PASSWORD"\n' >> "$append_tmp"
         ;;
-      project-repo)
-        printf '\n# Default project-repo (replace)\nproject-repo="https://github.com/mon4d/example-project.git"\n' >> "$append_tmp"
+      PROJECT_REPO)
+        printf '\n# Default PROJECT_REPO (replace)\nPROJECT_REPO="https://github.com/mon4d/example-project.git"\n' >> "$append_tmp"
         ;;
     esac
   done
@@ -56,7 +56,7 @@ fi
 
 # Write to a temp file and atomically move into place to avoid partial writes.
 tmpfile="${CONFIG_PATH}.tmp.$$"
-cat > "$tmpfile" <<'EOF'
+cat > "$tmpfile" <<EOF
 # system.config - HeadlessPI runtime config
 # Provide the minimum required values below. Lines starting with '#' are comments.
 
@@ -64,9 +64,8 @@ cat > "$tmpfile" <<'EOF'
 WIFI_UUID="YOUR_WIFI_SSID_OR_UUID"
 WIFI_PASSWORD="YOUR_WIFI_PASSWORD"
 
-# Default project repo from internal config, can be overridden here:
-PROJECT_REPO="$PROJECT_REPO"
-
+# Default project-repo from internal config, can be overridden here:
+PROJECT_REPO="${PROJECT_REPO:-}"
 EOF
 
 chmod 0644 "$tmpfile"

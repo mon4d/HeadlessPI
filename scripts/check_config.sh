@@ -21,7 +21,8 @@ PROJECT_REPO=""
 while IFS= read -r _line || [ -n "$_line" ]; do
   line="${_line%%#*}"           # strip comments starting with #
   # trim leading and trailing whitespace
-  line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  line="${line#"${line%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
   [ -z "${line}" ] && continue
 
   if [[ $line =~ ^([A-Za-z_][A-Za-z0-9_-]*)=(.*)$ ]]; then
@@ -35,13 +36,13 @@ while IFS= read -r _line || [ -n "$_line" ]; do
     fi
 
     case "$key" in
-      wifi_uuid)
+      WIFI_UUID)
         WIFI_UUID="$val"
         ;;
-      wifi_password)
+      WIFI_PASSWORD)
         WIFI_PASSWORD="$val"
         ;;
-      project-repo)
+      PROJECT_REPO)
         PROJECT_REPO="$val"
         ;;
       *)
@@ -52,9 +53,9 @@ while IFS= read -r _line || [ -n "$_line" ]; do
 done < "$CONFIG_PATH"
 
 missing=()
-[ -z "$WIFI_UUID" ] && missing+=("wifi_uuid")
-[ -z "$WIFI_PASSWORD" ] && missing+=("wifi_password")
-[ -z "$PROJECT_REPO" ] && missing+=("project-repo")
+[ -z "$WIFI_UUID" ] && missing+=("WIFI_UUID")
+[ -z "$WIFI_PASSWORD" ] && missing+=("WIFI_PASSWORD")
+[ -z "$PROJECT_REPO" ] && missing+=("PROJECT_REPO")
 
 if [ ${#missing[@]} -ne 0 ]; then
   echo "ERROR: Missing required keys in config: ${missing[*]}" >&2
