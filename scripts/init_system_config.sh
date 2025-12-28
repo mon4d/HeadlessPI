@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEST="${CONFIG_PATH:-}"
-PROJECT_REPO="${PROJECT_REPO:-}"
+CONFIG_PATH="${1:-/mnt/usb/system.config}"
+PROJECT_REPO="${2:-}"
 
-echo "Initializing config at '$DEST' if missing..."
+echo "Initializing config at '$CONFIG_PATH' if missing..."
 
-if [ -f "$DEST" ]; then
-  echo "Config file already exists at '$DEST'. Checking for missing keys..."
+if [ -f "$CONFIG_PATH" ]; then
+  echo "Config file already exists at '$CONFIG_PATH'. Checking for missing keys..."
 
   missing_keys=()
   for key in wifi_uuid wifi_password project-repo; do
-    if ! grep -qE "^[[:space:]]*${key}=" "$DEST"; then
+    if ! grep -qE "^[[:space:]]*${key}=" "$CONFIG_PATH"; then
       missing_keys+=("$key")
     fi
   done
@@ -22,7 +22,7 @@ if [ -f "$DEST" ]; then
   fi
 
   echo "Missing keys: ${missing_keys[*]}. Appending defaults..."
-  append_tmp="${DEST}.append.$$"
+  append_tmp="${CONFIG_PATH}.append.$$"
   : > "$append_tmp"
 
   for k in "${missing_keys[@]}"; do
@@ -39,23 +39,23 @@ if [ -f "$DEST" ]; then
     esac
   done
 
-  cat "$append_tmp" >> "$DEST"
+  cat "$append_tmp" >> "$CONFIG_PATH"
   rm -f "$append_tmp"
-  chmod 0644 "$DEST"
+  chmod 0644 "$CONFIG_PATH"
   sync
 
-  echo "Appended defaults to '$DEST'. Please edit and fill real values before rebooting."
+  echo "Appended defaults to '$CONFIG_PATH'. Please edit and fill real values before rebooting."
   exit 0
 fi
 
-DEST_DIR="$(dirname "$DEST")"
+DEST_DIR="$(dirname "$CONFIG_PATH")"
 if [ ! -d "$DEST_DIR" ]; then
   echo "ERROR: mount point directory does not exist: $DEST_DIR" >&2
   exit 1
 fi
 
 # Write to a temp file and atomically move into place to avoid partial writes.
-tmpfile="${DEST}.tmp.$$"
+tmpfile="${CONFIG_PATH}.tmp.$$"
 cat > "$tmpfile" <<'EOF'
 # system.config - HeadlessPI runtime config
 # Provide the minimum required values below. Lines starting with '#' are comments.
@@ -70,9 +70,9 @@ PROJECT_REPO="$PROJECT_REPO"
 EOF
 
 chmod 0644 "$tmpfile"
-mv -f "$tmpfile" "$DEST"
+mv -f "$tmpfile" "$CONFIG_PATH"
 sync
 
-echo "Wrote default config to '$DEST'. Please edit it with real values before booting."
+echo "Wrote default config to '$CONFIG_PATH'. Please edit it with real values before booting."
 
 exit 0
