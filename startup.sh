@@ -209,6 +209,44 @@ else
 fi
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# If the raspberry is not in read-only mode, this is when we set it back to read-only
+# after all write operations are done and before launching the main script.
+# In any future starts the system will boot in read-only mode until we manually trigger the write mode again.
+overlay_enabled() {
+  # Return 0 if the overlay initramfs method is active (boot=overlay in cmdline or overlay mount on /)
+  if grep -q --fixed-strings "boot=overlay" /proc/cmdline 2>/dev/null; then
+    return 0
+  fi
+  if awk '$2=="/" {print $3; exit}' /proc/mounts 2>/dev/null | grep -qw overlay; then
+    return 0
+  fi
+  return 1
+}
+
+if !overlay_enabled; then
+  echo "Overlay not active; attempting to enable via raspi-config (non-interactive)..."
+
+  if ! command -v raspi-config >/dev/null 2>&1; then
+    echo "ERROR: raspi-config not found; cannot enable overlay automatically." >&2
+  else
+    # Use the distribution-provided raspi-config non-interactive action to enable overlay.
+    # According to documentation: sudo raspi-config nonint do_overlayfs 0 -> enable overlay
+    echo "Running: sudo raspi-config nonint do_overlayfs 0"
+    if sudo raspi-config nonint do_overlayfs 0; then
+      echo "raspi-config reported success; syncing and rebooting to apply overlay..."
+      sync
+      sleep 2
+      reboot
+    else
+      rc=$?
+      echo "WARNING: raspi-config failed with exit code $rc. Leaving system writable and continuing." >&2
+    fi
+  fi
+else
+  echo "Overlay already active; continuing startup."
+fi
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Finally, launch the main project script main.py
 MAIN_SCRIPT="$USB_PROJECT_DIR/main.py"
 export CONFIG_DIR="$MOUNT_POINT"
@@ -216,7 +254,8 @@ export DATA_DIR="$MOUNT_POINT/data"
 
 if [ -f "$MAIN_SCRIPT" ]; then
   echo "Launching main project script: $MAIN_SCRIPT"
-  python3 "$MAIN_SCRIPT"
+  # Replace shell with the Python process so systemd tracks the correct PID
+  exec python3 "$MAIN_SCRIPT"
 else
   echo "ERROR: Main project script not found at '$MAIN_SCRIPT'. Cannot continue." >&2
   exit 1
