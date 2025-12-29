@@ -36,18 +36,18 @@ read_project_repo() {
 }
 
 if [ ! -f "$CONFIG_PATH" ]; then
-  echo "ERROR: config not found: $CONFIG_PATH" >&2
+  echo "ERROR: config not found: $CONFIG_PATH"
   exit 1
 fi
 
 PROJECT_REPO=""
 if ! PROJECT_REPO="$(read_project_repo "$CONFIG_PATH")" || [ -z "$PROJECT_REPO" ]; then
-  echo "ERROR: PROJECT_REPO not set in $CONFIG_PATH" >&2
+  echo "ERROR: PROJECT_REPO not set in $CONFIG_PATH"
   exit 2
 fi
 
 if ! command -v git >/dev/null 2>&1; then
-  echo "ERROR: git is not available on this system" >&2
+  echo "ERROR: git is not available on this system"
   exit 3
 fi
 
@@ -60,8 +60,8 @@ if [ ! -d "$DEST_DIR" ]; then
   if git clone --depth 1 "$PROJECT_REPO" "$DEST_DIR"; then
     echo "Clone successful."
     exit 0
-  else
-    echo "ERROR: git clone failed for $PROJECT_REPO" >&2
+    else
+    echo "ERROR: git clone failed for $PROJECT_REPO"
     rm -rf "$DEST_DIR" || true
     exit 4
   fi
@@ -89,7 +89,7 @@ if [ -d "$DEST_DIR/.git" ]; then
       origin_branch="${origin_head#refs/heads/}"
       git -C "$DEST_DIR" reset --hard "origin/$origin_branch"
     else
-      echo "Could not determine origin HEAD; skipping automatic reset." >&2
+      echo "Could not determine origin HEAD; skipping automatic reset."
     fi
   fi
   set -e
@@ -105,7 +105,7 @@ if [ -e "$DEST_DIR" ]; then
     echo "Clone successful."
     exit 0
   else
-    echo "ERROR: git clone failed for $PROJECT_REPO" >&2
+    echo "ERROR: git clone failed for $PROJECT_REPO"
     rm -rf "$DEST_DIR" || true
     exit 5
   fi

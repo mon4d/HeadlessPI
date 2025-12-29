@@ -52,7 +52,7 @@ fi
 
 if [ -z "$device" ]; then
   # No device found
-  echo "No USB device found" >&2
+  echo "No USB device found"
   exit 2
 fi
 
@@ -78,6 +78,6 @@ esac
 if err=$(mount $mount_opts "$device" "$MOUNT_POINT" 2>&1); then
   exit 0
 else
-  echo "$err" >&2
+  echo "$err"
   exit 3
 fi

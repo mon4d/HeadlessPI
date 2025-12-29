@@ -11,7 +11,7 @@ SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 echo "Project directory: $PROJECT_DIR"
 
 if [ ! -f "$PROJECT_DIR/startup.sh" ]; then
-  echo "ERROR: startup.sh not found in project directory: $PROJECT_DIR" >&2
+  echo "ERROR: startup.sh not found in project directory: $PROJECT_DIR"
   exit 1
 fi
 

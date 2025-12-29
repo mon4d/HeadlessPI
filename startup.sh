@@ -17,10 +17,26 @@ echo "Starting HeadlessPI startup sequence..."
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # First: Read the internal config file at $SCRIPTDIR/internal.config and write default values to environment variables
+STARTUP_REPO=""
 USB_LABEL=""
 PROJECT_REPO=""
 VIRTUAL_ENV=""
 INTERNAL_CONFIG="$SCRIPTDIR/internal.config"
+
+# Helper: remove matching surrounding single or double quotes from a string
+strip_surrounding_quotes() {
+  local s="$1"
+  while [ ${#s} -ge 2 ]; do
+    local first="${s:0:1}"
+    local last="${s:$((${#s}-1)):1}"
+    if { [ "$first" = '"' ] && [ "$last" = '"' ]; } || { [ "$first" = "'" ] && [ "$last" = "'" ]; }; then
+      s="${s:1:$((${#s}-2))}"
+    else
+      break
+    fi
+  done
+  printf '%s' "$s"
+}
 
 if [ -f "$INTERNAL_CONFIG" ]; then
   while IFS= read -r _line || [ -n "$_line" ]; do
@@ -31,28 +47,30 @@ if [ -f "$INTERNAL_CONFIG" ]; then
     if [[ $line =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
       key="${BASH_REMATCH[1]}"
       val="${BASH_REMATCH[2]}"
-      if [[ $val =~ ^"(.*)"$ ]]; then
-        val="${BASH_REMATCH[1]}"
-      elif [[ $val =~ ^\'(.*)\'$ ]]; then
-        val="${BASH_REMATCH[1]}"
-      fi
+      # Strip any surrounding single/double quotes so values are clean for later use
+      val="$(strip_surrounding_quotes "$val")"
 
-      case "$key" in
-        USB_LABEL)
-          if [ -z "${USB_LABEL:-}" ]; then
-            USB_LABEL=$val
-          fi
-          ;;
-        PROJECT_REPO)
-          if [ -z "${PROJECT_REPO:-}" ]; then
-            PROJECT_REPO=$val
-          fi
-          ;;
-        VIRTUAL_ENV)
-          if [ -z "${VIRTUAL_ENV:-}" ]; then
-            VIRTUAL_ENV=$val
-          fi
-          ;;
+        case "$key" in
+          STARTUP_REPO)
+            if [ -z "${STARTUP_REPO:-}" ]; then
+              STARTUP_REPO=$val
+            fi
+            ;;
+          USB_LABEL)
+            if [ -z "${USB_LABEL:-}" ]; then
+              USB_LABEL=$val
+            fi
+            ;;
+          PROJECT_REPO)
+            if [ -z "${PROJECT_REPO:-}" ]; then
+              PROJECT_REPO=$val
+            fi
+            ;;
+          VIRTUAL_ENV)
+            if [ -z "${VIRTUAL_ENV:-}" ]; then
+              VIRTUAL_ENV=$val
+            fi
+            ;;
         *)
           # ignore unknown keys
           ;;
@@ -61,21 +79,53 @@ if [ -f "$INTERNAL_CONFIG" ]; then
   done < "$INTERNAL_CONFIG"
 fi
 
+echo "Using STARTUP_REPO='$STARTUP_REPO'"
 echo "Using USB_LABEL='$USB_LABEL'"
 echo "Using PROJECT_REPO='$PROJECT_REPO'"
 echo "Using VIRTUAL_ENV='$VIRTUAL_ENV'"
 
-# If a virtualenv activation script/path was provided in internal.config, expand '~' and try to source it.
-if [ -n "${VIRTUAL_ENV:-}" ]; then
-  # Strip surrounding single or double quotes if present
-  if [ ${#VIRTUAL_ENV} -ge 2 ]; then
-    first_char="${VIRTUAL_ENV:0:1}"
-    last_char="${VIRTUAL_ENV:$((${#VIRTUAL_ENV}-1)):1}"
-    if { [ "$first_char" = '"' ] && [ "$last_char" = '"' ]; } || { [ "$first_char" = "'" ] && [ "$last_char" = "'" ]; }; then
-      VIRTUAL_ENV="${VIRTUAL_ENV:1:$((${#VIRTUAL_ENV}-2))}"
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# If the filesystem is read-write, we can try to update the startup scripts from the STARTUP_REPO.
+if [ -n "$STARTUP_REPO" ]; then
+  if grep -qw "ro," /proc/mounts 2>/dev/null | awk '$2=="/" {print $3; exit}'; then
+    echo "Filesystem is read-only; checking if there are any updates available."
+    if git -C "$SCRIPTDIR" fetch --all --tags --prune && git -C "$SCRIPTDIR" remote show origin | grep -q 'local out of date'; then
+      echo "Updates are available in '$STARTUP_REPO'"
+      echo "Making filesystem writable and rebooting to apply updates..."
+      if command -v raspi-config >/dev/null 2>&1; then
+        # Use the distribution-provided raspi-config non-interactive action to disable overlay.
+        # According to documentation: sudo raspi-config nonint do_overlayfs 1 -> disable overlay
+        echo "Running: sudo raspi-config nonint do_overlayfs 1" # in the raspberry config 0 is to enable overlay, 1 to disable
+        if sudo raspi-config nonint do_overlayfs 1; then
+          echo "raspi-config reported success; syncing and rebooting to apply updates..."
+          sync
+          sleep 2
+          reboot
+        else
+          rc=$?
+          echo "ERROR: raspi-config failed with exit code $rc. Cannot apply updates automatically."
+        fi
+      else
+        echo "ERROR: raspi-config not found; cannot enable write mode automatically."
+      fi
+    else
+      echo "No updates available for startup scripts."
+    fi
+  else
+    echo "Updating startup scripts from repository: $STARTUP_REPO"
+    if git -C "$SCRIPTDIR" fetch --all --tags --prune && git -C "$SCRIPTDIR" reset --hard origin/main; then
+      echo "Startup scripts updated successfully."
+    else
+      echo "WARNING: Failed to update startup scripts from '$STARTUP_REPO'. Continuing with existing scripts."
     fi
   fi
+else
+  echo "No STARTUP_REPO defined; skipping startup script update."
+fi
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# If a virtualenv activation script/path was provided in internal.config, expand '~' and try to source it.
+if [ -n "${VIRTUAL_ENV:-}" ]; then
   # Expand leading ~ to $HOME
   if [[ "$VIRTUAL_ENV" == ~* ]]; then
     VIRTUAL_ENV="${VIRTUAL_ENV/#\~/$HOME}"
@@ -86,7 +136,7 @@ if [ -n "${VIRTUAL_ENV:-}" ]; then
     # shellcheck disable=SC1090
     source "$VIRTUAL_ENV"
   else
-    echo "WARNING: VIRTUAL_ENV '$VIRTUAL_ENV' not found; skipping activation." >&2
+    echo "WARNING: VIRTUAL_ENV '$VIRTUAL_ENV' not found; skipping activation."
   fi
 fi
 
@@ -96,7 +146,7 @@ MOUNT_POINT="/mnt/usb"
 
 if ! bash "$SCRIPTDIR/scripts/mount_usb.sh" "$MOUNT_POINT" "$USB_LABEL"; then
   ret=$?
-  echo "USB mount failed (code: $ret)." >&2
+  echo "USB mount failed (code: $ret)."
   exit $ret
 fi
 
@@ -108,19 +158,19 @@ CONFIG_PATH="$MOUNT_POINT/system.config"
 
 if ! bash "$SCRIPTDIR/scripts/check_config.sh" "$CONFIG_PATH"; then
   cfg_ret=$?
-  echo "Config validation failed (code: $cfg_ret). Attempting to write defaults to config..." >&2
+  echo "Config validation failed (code: $cfg_ret). Attempting to write defaults to config..."
 
   # Try to create or append defaults to the config on the USB and re-run validation
   if bash "$SCRIPTDIR/scripts/init_system_config.sh" "$CONFIG_PATH" "$PROJECT_REPO"; then
     echo "Defaults written to '$CONFIG_PATH'. Re-running validation..."
     if ! bash "$SCRIPTDIR/scripts/check_config.sh" "$CONFIG_PATH"; then
       cfg_ret=$?
-      echo "Config validation still failed after writing defaults (code: $cfg_ret). Aborting startup." >&2
+      echo "Config validation still failed after writing defaults (code: $cfg_ret). Aborting startup."
       exit $cfg_ret
     fi
   else
     init_ret=$?
-    echo "Failed to write defaults (code: $init_ret). Aborting startup." >&2
+    echo "Failed to write defaults (code: $init_ret). Aborting startup."
     exit $init_ret
   fi
 fi
@@ -133,7 +183,7 @@ IFACE="${WIFI_IFACE:-wlan0}"
 
 if ! bash "$SCRIPTDIR/scripts/setup_wifi.sh" "$CONFIG_PATH" "$IFACE"; then
   sw_ret=$?
-  echo "Wifi setup failed (code: $sw_ret). Continuing startup, but network may be unavailable." >&2
+  echo "Wifi setup failed (code: $sw_ret). Continuing startup, but network may be unavailable."
   exit $sw_ret
 fi
 
@@ -141,8 +191,8 @@ echo "Wifi setup completed; waiting for connectivity..."
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Wait up to WIFI_WAIT seconds for interface to get IP and for internet connectivity
-WIFI_WAIT="${WIFI_WAIT:-60}"
-WIFI_POLL_INTERVAL=3
+WIFI_WAIT="${WIFI_WAIT:-120}"
+WIFI_POLL_INTERVAL=1
 elapsed=0
 connected=0
 
@@ -162,7 +212,8 @@ elapsed=$((elapsed + WIFI_POLL_INTERVAL))
 done
 
 if ! [ $connected -eq 1 ]; then
-echo "WARNING: WiFi or internet not reachable after ${WIFI_WAIT}s." >&2
+  echo "WARNING: WiFi or internet not reachable after ${WIFI_WAIT}s. Retrying..."
+  exit 1
 fi
 
 echo "WiFi and internet reachable after ${elapsed}s."
@@ -173,7 +224,7 @@ USB_PROJECT_DIR="$MOUNT_POINT/system"
 
 if ! bash "$SCRIPTDIR/scripts/update_project_repo.sh" "$CONFIG_PATH" "$USB_PROJECT_DIR"; then
   upr_ret=$?
-  echo "Project repository update failed (code: $upr_ret). Continuing startup." >&2
+  echo "Project repository update failed (code: $upr_ret). Continuing startup."
   exit $upr_ret
 fi
 
@@ -202,7 +253,7 @@ if [ -f "$REQ_FILE" ]; then
     echo "Additional dependencies installed with python -m pip."
 
   else
-    echo "WARNING: pip3 not found and 'python -m pip' unavailable; cannot install additional dependencies." >&2
+    echo "WARNING: pip3 not found and 'python -m pip' unavailable; cannot install additional dependencies."
   fi
 else
   echo "No additional dependencies file found at '$REQ_FILE'. Skipping."
@@ -215,19 +266,22 @@ fi
 overlay_enabled() {
   # Return 0 if the overlay initramfs method is active (boot=overlay in cmdline or overlay mount on /)
   if grep -q --fixed-strings "boot=overlay" /proc/cmdline 2>/dev/null; then
-    return 1
+    echo "found overlayfs indication: boot=overlay in /proc/cmdline"
+    return 0
   fi
   if awk '$2=="/" {print $3; exit}' /proc/mounts 2>/dev/null | grep -qw overlay; then
-    return 1
+    echo "found overlayfs indication: overlay mount on /"
+    return 0
   fi
-  return 0
+  echo "found no overlayfs indication"
+  return 1
 }
 
 if !overlay_enabled; then
   echo "Overlay not active; attempting to enable via raspi-config (non-interactive)..."
 
   if ! command -v raspi-config >/dev/null 2>&1; then
-    echo "ERROR: raspi-config not found; cannot enable overlay automatically." >&2
+    echo "ERROR: raspi-config not found; cannot enable overlay automatically."
   else
     # Use the distribution-provided raspi-config non-interactive action to enable overlay.
     # According to documentation: sudo raspi-config nonint do_overlayfs 0 -> enable overlay
@@ -239,7 +293,7 @@ if !overlay_enabled; then
       reboot
     else
       rc=$?
-      echo "WARNING: raspi-config failed with exit code $rc. Leaving system writable and continuing." >&2
+      echo "WARNING: raspi-config failed with exit code $rc. Leaving system writable and continuing."
     fi
   fi
 else
@@ -257,7 +311,7 @@ if [ -f "$MAIN_SCRIPT" ]; then
   # Replace shell with the Python process so systemd tracks the correct PID
   exec python3 "$MAIN_SCRIPT"
 else
-  echo "ERROR: Main project script not found at '$MAIN_SCRIPT'. Cannot continue." >&2
+  echo "ERROR: Main project script not found at '$MAIN_SCRIPT'. Cannot continue."
   exit 1
 fi
 

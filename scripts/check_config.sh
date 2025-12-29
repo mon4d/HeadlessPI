@@ -10,7 +10,7 @@ CONFIG_PATH="${1:-/mnt/usb/system.config}"
 echo "Checking config at '$CONFIG_PATH'..."
 
 if [ ! -f "$CONFIG_PATH" ]; then
-  echo "ERROR: Config file not found: $CONFIG_PATH" >&2
+  echo "ERROR: Config file not found: $CONFIG_PATH"
   exit 1
 fi
 
@@ -63,7 +63,7 @@ missing=()
 [ -z "$PROJECT_REPO" ] && missing+=("PROJECT_REPO")
 
 if [ ${#missing[@]} -ne 0 ]; then
-  echo "ERROR: Missing required keys in config: ${missing[*]}" >&2
+  echo "ERROR: Missing required keys in config: ${missing[*]}"
   exit 2
 fi
 
@@ -75,7 +75,7 @@ else
 fi
 
 if [ $repo_ok -ne 0 ]; then
-  echo "WARNING: 'PROJECT_REPO' does not look like a valid URL/git repository: $PROJECT_REPO" >&2
+  echo "WARNING: 'PROJECT_REPO' does not look like a valid URL/git repository: $PROJECT_REPO"
 fi
 
 # Optional: warn if password is short

@@ -64,7 +64,7 @@ fi
 
 DEST_DIR="$(dirname "$CONFIG_PATH")"
 if [ ! -d "$DEST_DIR" ]; then
-  echo "ERROR: mount point directory does not exist: $DEST_DIR" >&2
+  echo "ERROR: mount point directory does not exist: $DEST_DIR"
   exit 1
 fi
 
