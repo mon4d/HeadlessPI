@@ -67,6 +67,16 @@ echo "Using VIRTUAL_ENV='$VIRTUAL_ENV'"
 
 # If a virtualenv activation script/path was provided in internal.config, expand '~' and try to source it.
 if [ -n "${VIRTUAL_ENV:-}" ]; then
+  # Strip surrounding single or double quotes if present
+  if [ ${#VIRTUAL_ENV} -ge 2 ]; then
+    first_char="${VIRTUAL_ENV:0:1}"
+    last_char="${VIRTUAL_ENV:$((${#VIRTUAL_ENV}-1)):1}"
+    if { [ "$first_char" = '"' ] && [ "$last_char" = '"' ]; } || { [ "$first_char" = "'" ] && [ "$last_char" = "'" ]; }; then
+      VIRTUAL_ENV="${VIRTUAL_ENV:1:$((${#VIRTUAL_ENV}-2))}"
+    fi
+  fi
+
+  # Expand leading ~ to $HOME
   if [[ "$VIRTUAL_ENV" == ~* ]]; then
     VIRTUAL_ENV="${VIRTUAL_ENV/#\~/$HOME}"
   fi
