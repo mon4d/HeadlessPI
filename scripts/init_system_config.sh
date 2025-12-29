@@ -34,7 +34,9 @@ if [ -f "$CONFIG_PATH" ]; then
         printf '\nWIFI_PASSWORD="YOUR_WIFI_PASSWORD"\n' >> "$append_tmp"
         ;;
       PROJECT_REPO)
-        printf "\n# Default project-repo from internal config, can be overridden here:\nPROJECT_REPO=%s\n" "$PROJECT_REPO" >> "$append_tmp"
+        # Ensure the PROJECT_REPO value is quoted and escaped
+        repo_esc="${PROJECT_REPO//\"/\\\"}"
+        printf "\n# Default PROJECT_REPO from internal config, can be overridden here:\nPROJECT_REPO=\"%s\"\n" "$repo_esc" >> "$append_tmp"
         ;;
     esac
   done
@@ -64,7 +66,7 @@ cat > "$tmpfile" <<EOF
 WIFI_UUID="YOUR_WIFI_SSID_OR_UUID"
 WIFI_PASSWORD="YOUR_WIFI_PASSWORD"
 
-# Default project-repo from internal config, can be overridden here:
+# Default PROJECT_REPO from internal config, can be overridden here:
 PROJECT_REPO="${PROJECT_REPO:-}"
 EOF
 

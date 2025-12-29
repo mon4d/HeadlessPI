@@ -61,7 +61,7 @@ echo "Using PROJECT_REPO='$PROJECT_REPO'"
 MOUNT_POINT="/mnt/usb"
 
 if ! bash "$SCRIPTDIR/scripts/mount_usb.sh" "$MOUNT_POINT" "$USB_LABEL"; then
-    ret=$?
+  ret=$?
   echo "USB mount failed (code: $ret)." >&2
   exit $ret
 fi
@@ -95,5 +95,85 @@ echo "Config found at '$CONFIG_PATH'. Validation passed."
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Connect to WiFi using the config values
+IFACE="${WIFI_IFACE:-wlan0}"
+
+if ! bash "$SCRIPTDIR/scripts/setup_wifi.sh" "$CONFIG_PATH" "$IFACE"; then
+  sw_ret=$?
+  echo "Wifi setup failed (code: $sw_ret). Continuing startup, but network may be unavailable." >&2
+  exit $sw_ret
+fi
+
+echo "Wifi setup completed; waiting for connectivity..."
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Wait up to WIFI_WAIT seconds for interface to get IP and for internet connectivity
+WIFI_WAIT="${WIFI_WAIT:-60}"
+WIFI_POLL_INTERVAL=3
+elapsed=0
+connected=0
+
+while [ $elapsed -lt $WIFI_WAIT ]; do
+if command -v ip >/dev/null 2>&1 && ip addr show "$IFACE" 2>/dev/null | grep -q 'inet '; then
+    if command -v ping >/dev/null 2>&1 && ping -c1 -W1 8.8.8.8 >/dev/null 2>&1; then
+    connected=1
+    break
+    fi
+    if command -v curl >/dev/null 2>&1 && curl -fsS --max-time 3 http://clients3.google.com/generate_204 >/dev/null 2>&1; then
+    connected=1
+    break
+    fi
+fi
+sleep $WIFI_POLL_INTERVAL
+elapsed=$((elapsed + WIFI_POLL_INTERVAL))
+done
+
+if ! [ $connected -eq 1 ]; then
+echo "WARNING: WiFi or internet not reachable after ${WIFI_WAIT}s." >&2
+fi
+
+echo "WiFi and internet reachable after ${elapsed}s."
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Clone or update the project repository on the USB drive
+USB_PROJECT_DIR="$MOUNT_POINT/system"
+
+if ! bash "$SCRIPTDIR/scripts/update_project_repo.sh" "$CONFIG_PATH" "$USB_PROJECT_DIR"; then
+  upr_ret=$?
+  echo "Project repository update failed (code: $upr_ret). Continuing startup." >&2
+  exit $upr_ret
+fi
+
+echo "Project repository is up to date at '$USB_PROJECT_DIR'."
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Now it's time to install any missing dependencies for the project.
+# They are defined in $USB_PROJECT_DIR/requirements-additional.txt
+REQ_FILE="$USB_PROJECT_DIR/requirements-additional.txt"
+if [ -f "$REQ_FILE" ]; then
+  echo "Installing additional dependencies from '$REQ_FILE'..."
+  if command -v pip3 >/dev/null 2>&1; then
+    pip3 install --no-cache-dir -r "$REQ_FILE"
+    echo "Additional dependencies installed."
+  else
+    echo "WARNING: pip3 not found; cannot install additional dependencies." >&2
+  fi
+else
+  echo "No additional dependencies file found at '$REQ_FILE'. Skipping."
+fi
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Finally, launch the main project script main.py
+MAIN_SCRIPT="$USB_PROJECT_DIR/main.py"
+EXPORT CONFIG_DIR="$MOUNT_POINT"
+EXPORT DATA_DIR="$MOUNT_POINT/data"
+
+if [ -f "$MAIN_SCRIPT" ]; then
+  echo "Launching main project script: $MAIN_SCRIPT"
+  python3 "$MAIN_SCRIPT"
+else
+  echo "ERROR: Main project script not found at '$MAIN_SCRIPT'. Cannot continue." >&2
+  exit 1
+fi
+
 
 exit 0
