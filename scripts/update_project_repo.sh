@@ -19,8 +19,13 @@ read_project_repo() {
       val="${BASH_REMATCH[2]}"
       val="$(echo "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       val="${val//$'\r'/}"
-      if [[ $val =~ ^"(.*)"$ ]]; then val="${BASH_REMATCH[1]}"; fi
-      if [[ $val =~ ^'(.*)'$ ]]; then val="${BASH_REMATCH[1]}"; fi
+      # remove any surrounding single or double quotes (handles multiple quotes)
+      while [[ "${val:0:1}" == '"' || "${val:0:1}" == "'" ]]; do
+        val="${val#?}"
+      done
+      while [[ "${val: -1}" == '"' || "${val: -1}" == "'" ]]; do
+        val="${val%?}"
+      done
       if [ "$key" = "PROJECT_REPO" ]; then
         printf '%s' "$val"
         return 0

@@ -57,14 +57,68 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Escape double quotes and backslashes in SSID and PSK
-esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\\"/g'; }
+esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/\"/\\\\\"/g'; }
 SSID_ESC="$(esc "$SSID")"
 PSK_ESC="$(esc "$PSK")"
 
-# Always apply runtime-only: write a runtime config to /run and use wpa_supplicant/wpa_cli
-run_conf="/run/wpa_supplicant_${IFACE}.conf"
+# Helper: attempt to talk to an existing wpa_supplicant via wpa_cli
+try_existing_wpa() {
+  if ! command -v wpa_cli >/dev/null 2>&1; then
+    return 1
+  fi
+  # If wpa_cli can report status for the interface, reuse the existing daemon
+  if wpa_cli -i "$IFACE" status >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+# If an existing wpa_supplicant is managing this interface, just use wpa_cli
+if try_existing_wpa; then
+  echo "Using existing wpa_supplicant instance for $IFACE"
+  netid=$(wpa_cli -i "$IFACE" add_network 2>/dev/null | tr -d '\r' || true)
+  if [ -z "$netid" ]; then
+    echo "ERROR: failed to create network via wpa_cli" >&2
+    exit 5
+  fi
+  wpa_cli -i "$IFACE" set_network "$netid" ssid "\"$SSID\"" >/dev/null 2>&1 || true
+  wpa_cli -i "$IFACE" set_network "$netid" psk "\"$PSK\"" >/dev/null 2>&1 || true
+  wpa_cli -i "$IFACE" enable_network "$netid" >/dev/null 2>&1 || true
+  wpa_cli -i "$IFACE" select_network "$netid" >/dev/null 2>&1 || true
+  echo "Applied runtime WiFi network id $netid (SSID='$SSID') on $IFACE"
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart dhcpcd.service 2>/dev/null || true
+  fi
+  echo "Runtime WiFi configuration applied. Changes are not persisted to disk." 
+  exit 0
+fi
+
+# No existing controller reachable. Detect stale control socket(s) that could block starting.
+ctrl_dirs=("/run/wpa_supplicant" "/var/run/wpa_supplicant")
+for d in "${ctrl_dirs[@]}"; do
+  sock="$d/$IFACE"
+  if [ -e "$sock" ]; then
+    # If a wpa_supplicant process is actually running for this iface, prefer it
+    if pgrep -f "wpa_supplicant.*-i${IFACE}" >/dev/null 2>&1; then
+      echo "wpa_supplicant process already running for $IFACE; try using wpa_cli instead." >&2
+      echo "You can run: wpa_cli -i $IFACE status" >&2
+      exit 6
+    else
+      echo "Found stale control socket $sock; removing to allow starting a new wpa_supplicant"
+      rm -f "$sock" || true
+    fi
+  fi
+done
+
+# Prepare a private runtime config and private control directory to avoid colliding
+# with a system-managed wpa_supplicant instance when possible.
+ctrl_dir="/run/wpa_supplicant_${IFACE}"
+run_conf="${ctrl_dir}/wpa_supplicant.conf"
+mkdir -p "$ctrl_dir"
+chmod 750 "$ctrl_dir"
+
 cat > "$run_conf" <<EOF
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+ctrl_interface=DIR=${ctrl_dir} GROUP=netdev
 update_config=1
 country=DE
 
@@ -84,10 +138,17 @@ if ! pgrep -f "wpa_supplicant.*-i${IFACE}" >/dev/null 2>&1; then
   sleep 1
 fi
 
-# Use wpa_cli to add network (runtime only)
+# Now require wpa_cli to be present to program the running daemon
 if ! command -v wpa_cli >/dev/null 2>&1; then
   echo "ERROR: wpa_cli not available; cannot apply runtime WiFi config." >&2
   exit 4
+fi
+
+# Verify we can talk to the just-started wpa_supplicant
+if ! wpa_cli -i "$IFACE" status >/dev/null 2>&1; then
+  echo "ERROR: could not communicate with wpa_supplicant on $IFACE" >&2
+  echo "Check for existing wpa_supplicant or stale sockets in /run/wpa_supplicant" >&2
+  exit 7
 fi
 
 netid=$(wpa_cli -i "$IFACE" add_network 2>/dev/null | tr -d '\r' || true)
