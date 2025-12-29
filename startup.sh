@@ -175,11 +175,24 @@ echo "Project repository is up to date at '$USB_PROJECT_DIR'."
 REQ_FILE="$USB_PROJECT_DIR/requirements-additional.txt"
 if [ -f "$REQ_FILE" ]; then
   echo "Installing additional dependencies from '$REQ_FILE'..."
+
   if command -v pip3 >/dev/null 2>&1; then
+    echo "Using pip3 from PATH: $(command -v pip3)"
     pip3 install --no-cache-dir -r "$REQ_FILE"
-    echo "Additional dependencies installed."
+    echo "Additional dependencies installed with pip3."
+
+  elif command -v python3 >/dev/null 2>&1 && python3 -m pip --version >/dev/null 2>&1; then
+    echo "pip3 not found in PATH; using 'python3 -m pip' instead."
+    python3 -m pip install --no-cache-dir -r "$REQ_FILE"
+    echo "Additional dependencies installed with python3 -m pip."
+
+  elif command -v python >/dev/null 2>&1 && python -m pip --version >/dev/null 2>&1; then
+    echo "pip3 not found; using 'python -m pip' instead."
+    python -m pip install --no-cache-dir -r "$REQ_FILE"
+    echo "Additional dependencies installed with python -m pip."
+
   else
-    echo "WARNING: pip3 not found; cannot install additional dependencies." >&2
+    echo "WARNING: pip3 not found and 'python -m pip' unavailable; cannot install additional dependencies." >&2
   fi
 else
   echo "No additional dependencies file found at '$REQ_FILE'. Skipping."
@@ -188,8 +201,8 @@ fi
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Finally, launch the main project script main.py
 MAIN_SCRIPT="$USB_PROJECT_DIR/main.py"
-EXPORT CONFIG_DIR="$MOUNT_POINT"
-EXPORT DATA_DIR="$MOUNT_POINT/data"
+export CONFIG_DIR="$MOUNT_POINT"
+export DATA_DIR="$MOUNT_POINT/data"
 
 if [ -f "$MAIN_SCRIPT" ]; then
   echo "Launching main project script: $MAIN_SCRIPT"
