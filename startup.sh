@@ -215,12 +215,12 @@ fi
 overlay_enabled() {
   # Return 0 if the overlay initramfs method is active (boot=overlay in cmdline or overlay mount on /)
   if grep -q --fixed-strings "boot=overlay" /proc/cmdline 2>/dev/null; then
-    return 0
+    return 1
   fi
   if awk '$2=="/" {print $3; exit}' /proc/mounts 2>/dev/null | grep -qw overlay; then
-    return 0
+    return 1
   fi
-  return 1
+  return 0
 }
 
 if !overlay_enabled; then
@@ -231,7 +231,7 @@ if !overlay_enabled; then
   else
     # Use the distribution-provided raspi-config non-interactive action to enable overlay.
     # According to documentation: sudo raspi-config nonint do_overlayfs 0 -> enable overlay
-    echo "Running: sudo raspi-config nonint do_overlayfs 0"
+    echo "Running: sudo raspi-config nonint do_overlayfs 0" # in the raspberry config 0 is to enable overlay, 1 to disable
     if sudo raspi-config nonint do_overlayfs 0; then
       echo "raspi-config reported success; syncing and rebooting to apply overlay..."
       sync
