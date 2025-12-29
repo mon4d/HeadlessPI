@@ -41,13 +41,13 @@ while IFS= read -r _line || [ -n "$_line" ]; do
 
       case "$key" in
         WIFI_UUID)
-          WIFI_UUID="$val"
+          WIFI_UUID=$val
           ;;
         WIFI_PASSWORD)
-          WIFI_PASSWORD="$val"
+          WIFI_PASSWORD=$val
           ;;
         PROJECT_REPO)
-          PROJECT_REPO="$val"
+          PROJECT_REPO=$val
           ;;
         *)
           # ignore unknown keys
