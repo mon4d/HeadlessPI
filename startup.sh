@@ -40,17 +40,17 @@ if [ -f "$INTERNAL_CONFIG" ]; then
       case "$key" in
         USB_LABEL)
           if [ -z "${USB_LABEL:-}" ]; then
-            USB_LABEL="$val"
+            USB_LABEL=$val
           fi
           ;;
         PROJECT_REPO)
           if [ -z "${PROJECT_REPO:-}" ]; then
-            PROJECT_REPO="$val"
+            PROJECT_REPO=$val
           fi
           ;;
         VIRTUAL_ENV)
           if [ -z "${VIRTUAL_ENV:-}" ]; then
-            VIRTUAL_ENV="$val"
+            VIRTUAL_ENV=$val
           fi
           ;;
         *)
