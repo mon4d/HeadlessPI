@@ -6,6 +6,8 @@ if [ -w /dev/tty1 ]; then
   exec > /dev/tty1 2>&1
 fi
 
+cd HeadlessPI || exit 1
+
 # startup.sh - Steuerungs-Skript, wird beim Boot ausgeführt
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -17,6 +19,7 @@ echo "Starting HeadlessPI startup sequence..."
 # First: Read the internal config file at $SCRIPTDIR/internal.config and write default values to environment variables
 USB_LABEL=""
 PROJECT_REPO=""
+VIRTUAL_ENV=""
 INTERNAL_CONFIG="$SCRIPTDIR/internal.config"
 
 if [ -f "$INTERNAL_CONFIG" ]; then
@@ -45,6 +48,11 @@ if [ -f "$INTERNAL_CONFIG" ]; then
             PROJECT_REPO="$val"
           fi
           ;;
+        VIRTUAL_ENV)
+          if [ -z "${VIRTUAL_ENV:-}" ]; then
+            VIRTUAL_ENV="$val"
+          fi
+          ;;
         *)
           # ignore unknown keys
           ;;
@@ -55,6 +63,22 @@ fi
 
 echo "Using USB_LABEL='$USB_LABEL'"
 echo "Using PROJECT_REPO='$PROJECT_REPO'"
+echo "Using VIRTUAL_ENV='$VIRTUAL_ENV'"
+
+# If a virtualenv activation script/path was provided in internal.config, expand '~' and try to source it.
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  if [[ "$VIRTUAL_ENV" == ~* ]]; then
+    VIRTUAL_ENV="${VIRTUAL_ENV/#\~/$HOME}"
+  fi
+
+  if [ -f "$VIRTUAL_ENV" ]; then
+    echo "Activating virtual environment: $VIRTUAL_ENV"
+    # shellcheck disable=SC1090
+    source "$VIRTUAL_ENV"
+  else
+    echo "WARNING: VIRTUAL_ENV '$VIRTUAL_ENV' not found; skipping activation." >&2
+  fi
+fi
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Mount the USB drive
