@@ -19,8 +19,13 @@ get_key() {
       v="${BASH_REMATCH[2]}"
       v="$(echo "$v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       v="${v//$'\r'/}"
-      if [[ $v =~ ^"(.*)"$ ]]; then v="${BASH_REMATCH[1]}"; fi
-      if [[ $v =~ ^'(.*)'$ ]]; then v="${BASH_REMATCH[1]}"; fi
+      # remove any surrounding single or double quotes (handles multiple quotes)
+      while [[ "${v:0:1}" == '"' || "${v:0:1}" == "'" ]]; do
+        v="${v#?}"
+      done
+      while [[ "${v: -1}" == '"' || "${v: -1}" == "'" ]]; do
+        v="${v%?}"
+      done
       if [ "$k" = "$key" ]; then
         printf '%s' "$v"
         return 0
