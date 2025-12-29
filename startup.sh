@@ -6,10 +6,10 @@ if [ -w /dev/tty1 ]; then
   exec > /dev/tty1 2>&1
 fi
 
-cd HeadlessPI || exit 1
-
 # startup.sh - Steuerungs-Skript, wird beim Boot ausgeführt
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cd "$SCRIPTDIR" || exit 1
 
 echo ""
 echo " - - - - - - - - - - - - - - - - - - - "
