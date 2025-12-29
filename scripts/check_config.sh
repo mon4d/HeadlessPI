@@ -69,10 +69,8 @@ fi
 # Basic validation for project repo URL
 # normalize by removing any surrounding single or double quotes that may remain
 project_repo_clean="$PROJECT_REPO"
-project_repo_clean="${project_repo_clean%\"}"
-project_repo_clean="${project_repo_clean#\"}"
-project_repo_clean="${project_repo_clean%\'}"
-project_repo_clean="${project_repo_clean#\'}"
+# remove all leading/trailing single or double quotes (handles multiple quotes)
+project_repo_clean="$(printf '%s' "$project_repo_clean" | sed -E 's/^["\']+//; s/["\']+$//')"
 
 # validate using grep -E for portability and clarity
 if printf '%s' "$project_repo_clean" | grep -E -q '^(https://|git@|ssh://|git://)'; then

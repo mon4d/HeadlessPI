@@ -34,8 +34,20 @@ if [ -f "$CONFIG_PATH" ]; then
         printf '\nWIFI_PASSWORD="YOUR_WIFI_PASSWORD"\n' >> "$append_tmp"
         ;;
       PROJECT_REPO)
-        # Ensure the PROJECT_REPO value is quoted and escaped
-        repo_esc="${PROJECT_REPO//\"/\\\"}"
+        # Ensure the PROJECT_REPO value is written with a single pair of surrounding
+        # double quotes. Strip any existing leading/trailing single or double
+        # quotes first, then escape internal double quotes for safe printing.
+        repo_val="$PROJECT_REPO"
+        # strip leading single/double quotes
+        while [[ "${repo_val:0:1}" == '"' || "${repo_val:0:1}" == "'" ]]; do
+          repo_val="${repo_val#?}"
+        done
+        # strip trailing single/double quotes
+        while [[ "${repo_val: -1}" == '"' || "${repo_val: -1}" == "'" ]]; do
+          repo_val="${repo_val%?}"
+        done
+        # escape any internal double quotes so printf keeps a single surrounding pair
+        repo_esc="${repo_val//\"/\\\"}"
         printf "\n# Default PROJECT_REPO from internal config, can be overridden here:\nPROJECT_REPO=\"%s\"\n" "$repo_esc" >> "$append_tmp"
         ;;
     esac
