@@ -73,12 +73,45 @@ try_existing_wpa() {
   return 1
 }
 
+# Find an existing network id in wpa_supplicant that matches $SSID.
+# Prints the network id to stdout and returns 0 if found, non-zero otherwise.
+find_netid_for_ssid() {
+  local lines line nid cur_ssid
+  if ! command -v wpa_cli >/dev/null 2>&1; then
+    return 1
+  fi
+  lines=$(wpa_cli -i "$IFACE" list_networks 2>/dev/null | tr -d '\r' || true)
+  [ -n "$lines" ] || return 1
+  while IFS= read -r line; do
+    # skip header and empty lines
+    case "$line" in
+      network*|"") continue ;;
+    esac
+    nid=$(printf '%s' "$line" | awk '{print $1}')
+    [ -z "$nid" ] && continue
+    cur_ssid=$(wpa_cli -i "$IFACE" get_network "$nid" ssid 2>/dev/null || true)
+    # strip surrounding quotes if present
+    cur_ssid="${cur_ssid%\"}"
+    cur_ssid="${cur_ssid#\"}"
+    if [ "$cur_ssid" = "$SSID" ]; then
+      printf '%s' "$nid"
+      return 0
+    fi
+  done <<< "$lines"
+  return 1
+}
+
 # If an existing wpa_supplicant is managing this interface, just use wpa_cli
 if try_existing_wpa; then
   echo "Using existing wpa_supplicant instance for $IFACE"
-  netid=$(wpa_cli -i "$IFACE" add_network 2>/dev/null | tr -d '\r' || true)
+  # Reuse an existing network with the same SSID if present, otherwise create one
+  if netid=$(find_netid_for_ssid); then
+    echo "Reusing existing network id $netid for SSID='$SSID'"
+  else
+    netid=$(wpa_cli -i "$IFACE" add_network 2>/dev/null | tr -d '\r' || true)
+  fi
   if [ -z "$netid" ]; then
-    echo "ERROR: failed to create network via wpa_cli" >&2
+    echo "ERROR: failed to create/find network via wpa_cli" >&2
     exit 5
   fi
   wpa_cli -i "$IFACE" set_network "$netid" ssid "\"$SSID\"" >/dev/null 2>&1 || true
@@ -151,9 +184,14 @@ if ! wpa_cli -i "$IFACE" status >/dev/null 2>&1; then
   exit 7
 fi
 
-netid=$(wpa_cli -i "$IFACE" add_network 2>/dev/null | tr -d '\r' || true)
+# Reuse an existing network with the same SSID if present, otherwise create one
+if netid=$(find_netid_for_ssid); then
+  echo "Reusing existing network id $netid for SSID='$SSID'"
+else
+  netid=$(wpa_cli -i "$IFACE" add_network 2>/dev/null | tr -d '\r' || true)
+fi
 if [ -z "$netid" ]; then
-  echo "ERROR: failed to create network via wpa_cli" >&2
+  echo "ERROR: failed to create/find network via wpa_cli" >&2
   exit 5
 fi
 
