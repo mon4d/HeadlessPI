@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-MOUNT_POINT="$1:/mnt/usb"
+MOUNT_POINT="$1/mnt/usb"
 USB_LABEL="${2:-}"
 
 mkdir -p "$MOUNT_POINT"
