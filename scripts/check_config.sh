@@ -32,12 +32,13 @@ while IFS= read -r _line || [ -n "$_line" ]; do
       val="$(echo "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       # remove DOS CR if present
       val="${val//$'\r'/}"
-      # strip surrounding quotes if present
-      if [[ $val =~ ^"(.*)"$ ]]; then
-        val="${BASH_REMATCH[1]}"
-      elif [[ $val =~ ^\'(.*)\'$ ]]; then
-        val="${BASH_REMATCH[1]}"
-      fi
+      # remove any surrounding single or double quotes (handles multiple quotes)
+      while [[ "${val:0:1}" == '"' || "${val:0:1}" == "'" ]]; do
+        val="${val#?}"
+      done
+      while [[ "${val: -1}" == '"' || "${val: -1}" == "'" ]]; do
+        val="${val%?}"
+      done
 
       case "$key" in
         WIFI_UUID)
@@ -67,15 +68,14 @@ if [ ${#missing[@]} -ne 0 ]; then
 fi
 
 # validate using grep -E for portability and clarity
-if printf '%s' $PROJECT_REPO | grep -E -q '^(https://|git@|ssh://|git://)'; then
+if printf '%s' "$PROJECT_REPO" | grep -E -q '^(https://|git@|ssh://|git://)'; then
   repo_ok=0
 else
   repo_ok=1
 fi
 
 if [ $repo_ok -ne 0 ]; then
-  echo "ERROR: 'PROJECT_REPO' does not look like a valid URL/git repository: $PROJECT_REPO" >&2
-  exit 3
+  echo "WARNING: 'PROJECT_REPO' does not look like a valid URL/git repository: $PROJECT_REPO" >&2
 fi
 
 # Optional: warn if password is short
