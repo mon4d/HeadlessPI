@@ -15,6 +15,7 @@ echo ""
 echo " - - - - - - - - - - - - - - - - - - - "
 echo "Starting HeadlessPI startup sequence..."
 
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # First: Read the internal config file at $SCRIPTDIR/internal.config and write default values to environment variables
 STARTUP_REPO=""
@@ -84,6 +85,77 @@ echo "Using USB_LABEL='$USB_LABEL'"
 echo "Using PROJECT_REPO='$PROJECT_REPO'"
 echo "Using VIRTUAL_ENV='$VIRTUAL_ENV'"
 
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# If a virtualenv activation script/path was provided in internal.config, expand '~' and try to source it.
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  # Expand leading ~ to $HOME
+  if [[ "$VIRTUAL_ENV" == ~* ]]; then
+    VIRTUAL_ENV="${VIRTUAL_ENV/#\~/$HOME}"
+  fi
+
+  if [ -f "$VIRTUAL_ENV" ]; then
+    echo "Activating virtual environment: $VIRTUAL_ENV"
+    # shellcheck disable=SC1090
+    source "$VIRTUAL_ENV"
+  else
+    echo "WARNING: VIRTUAL_ENV '$VIRTUAL_ENV' not found; skipping activation."
+  fi
+fi
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Mount the USB drive
+MOUNT_POINT="/mnt/usb"
+
+if ! bash "$SCRIPTDIR/scripts/mount_usb.sh" "$MOUNT_POINT" "$USB_LABEL"; then
+  ret=$?
+  echo "USB mount failed (code: $ret)."
+  exit $ret
+fi
+
+echo "USB mounted successfully."
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Next: Validate config on the mounted USB. Default path is /mnt/usb/system.config
+CONFIG_PATH="$MOUNT_POINT/system.config"
+
+if ! bash "$SCRIPTDIR/scripts/check_config.sh" "$CONFIG_PATH"; then
+  cfg_ret=$?
+  echo "Config validation failed (code: $cfg_ret). Attempting to write defaults to config..."
+
+  # Try to create or append defaults to the config on the USB and re-run validation
+  if bash "$SCRIPTDIR/scripts/init_system_config.sh" "$CONFIG_PATH" "$PROJECT_REPO"; then
+    echo "Defaults written to '$CONFIG_PATH'. Re-running validation..."
+    if ! bash "$SCRIPTDIR/scripts/check_config.sh" "$CONFIG_PATH"; then
+      cfg_ret=$?
+      echo "Config validation still failed after writing defaults (code: $cfg_ret). Aborting startup."
+      exit $cfg_ret
+    fi
+  else
+    init_ret=$?
+    echo "Failed to write defaults (code: $init_ret). Aborting startup."
+    exit $init_ret
+  fi
+fi
+
+echo "Config found at '$CONFIG_PATH'. Validation passed."
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Connect to WiFi using the config values
+# setup_wifi.sh now handles both configuration and connectivity verification
+IFACE="${WIFI_IFACE:-wlan0}"
+
+if ! bash "$SCRIPTDIR/scripts/setup_wifi.sh" "$CONFIG_PATH" "$IFACE"; then
+  sw_ret=$?
+  echo "WiFi setup failed (code: $sw_ret). Network unavailable."
+  exit $sw_ret
+fi
+
+
+echo "WiFi setup completed with internet connectivity verified."
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # If the filesystem is read-write, we can try to update the startup scripts from the STARTUP_REPO.
 if [ -n "$STARTUP_REPO" ]; then
@@ -123,72 +195,6 @@ else
   echo "No STARTUP_REPO defined; skipping startup script update."
 fi
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# If a virtualenv activation script/path was provided in internal.config, expand '~' and try to source it.
-if [ -n "${VIRTUAL_ENV:-}" ]; then
-  # Expand leading ~ to $HOME
-  if [[ "$VIRTUAL_ENV" == ~* ]]; then
-    VIRTUAL_ENV="${VIRTUAL_ENV/#\~/$HOME}"
-  fi
-
-  if [ -f "$VIRTUAL_ENV" ]; then
-    echo "Activating virtual environment: $VIRTUAL_ENV"
-    # shellcheck disable=SC1090
-    source "$VIRTUAL_ENV"
-  else
-    echo "WARNING: VIRTUAL_ENV '$VIRTUAL_ENV' not found; skipping activation."
-  fi
-fi
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Mount the USB drive
-MOUNT_POINT="/mnt/usb"
-
-if ! bash "$SCRIPTDIR/scripts/mount_usb.sh" "$MOUNT_POINT" "$USB_LABEL"; then
-  ret=$?
-  echo "USB mount failed (code: $ret)."
-  exit $ret
-fi
-
-echo "USB mounted successfully."
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Next: Validate config on the mounted USB. Default path is /mnt/usb/system.config
-CONFIG_PATH="$MOUNT_POINT/system.config"
-
-if ! bash "$SCRIPTDIR/scripts/check_config.sh" "$CONFIG_PATH"; then
-  cfg_ret=$?
-  echo "Config validation failed (code: $cfg_ret). Attempting to write defaults to config..."
-
-  # Try to create or append defaults to the config on the USB and re-run validation
-  if bash "$SCRIPTDIR/scripts/init_system_config.sh" "$CONFIG_PATH" "$PROJECT_REPO"; then
-    echo "Defaults written to '$CONFIG_PATH'. Re-running validation..."
-    if ! bash "$SCRIPTDIR/scripts/check_config.sh" "$CONFIG_PATH"; then
-      cfg_ret=$?
-      echo "Config validation still failed after writing defaults (code: $cfg_ret). Aborting startup."
-      exit $cfg_ret
-    fi
-  else
-    init_ret=$?
-    echo "Failed to write defaults (code: $init_ret). Aborting startup."
-    exit $init_ret
-  fi
-fi
-
-echo "Config found at '$CONFIG_PATH'. Validation passed."
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Connect to WiFi using the config values
-# setup_wifi.sh now handles both configuration and connectivity verification
-IFACE="${WIFI_IFACE:-wlan0}"
-
-if ! bash "$SCRIPTDIR/scripts/setup_wifi.sh" "$CONFIG_PATH" "$IFACE"; then
-  sw_ret=$?
-  echo "WiFi setup failed (code: $sw_ret). Network unavailable."
-  exit $sw_ret
-fi
-
-echo "WiFi setup completed with internet connectivity verified."
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Clone or update the project repository on the USB drive
@@ -201,6 +207,7 @@ if ! bash "$SCRIPTDIR/scripts/update_project_repo.sh" "$CONFIG_PATH" "$USB_PROJE
 fi
 
 echo "Project repository is up to date at '$USB_PROJECT_DIR'."
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Now it's time to install any missing dependencies for the project.
@@ -230,6 +237,7 @@ if [ -f "$REQ_FILE" ]; then
 else
   echo "No additional dependencies file found at '$REQ_FILE'. Skipping."
 fi
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # If the raspberry is not in read-only mode, this is when we set it back to read-only
@@ -271,6 +279,7 @@ if !overlay_enabled; then
 else
   echo "Overlay already active; continuing startup."
 fi
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Finally, launch the main project script main.py
