@@ -67,9 +67,13 @@ get_all_wifi_configs() {
   local configs=""
   local index=1
   
-  # First check for legacy WIFI_UUID/WIFI_PASSWORD format
+  # First check for legacy WIFI_SSID/WIFI_PASSWORD format (fallback to older WIFI_UUID if not found)
   local legacy_ssid legacy_psk
-  if legacy_ssid="$(get_key "$config_file" WIFI_UUID)" && [ -n "$legacy_ssid" ]; then
+  if legacy_ssid="$(get_key "$config_file" WIFI_SSID)" && [ -n "$legacy_ssid" ]; then
+    if legacy_psk="$(get_key "$config_file" WIFI_PASSWORD)" && [ -n "$legacy_psk" ]; then
+      configs="0:${legacy_ssid}:${legacy_psk}"
+    fi
+  elif legacy_ssid="$(get_key "$config_file" WIFI_UUID)" && [ -n "$legacy_ssid" ]; then
     if legacy_psk="$(get_key "$config_file" WIFI_PASSWORD)" && [ -n "$legacy_psk" ]; then
       configs="0:${legacy_ssid}:${legacy_psk}"
     fi
