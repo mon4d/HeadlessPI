@@ -179,44 +179,16 @@ echo "Config found at '$CONFIG_PATH'. Validation passed."
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Connect to WiFi using the config values
+# setup_wifi.sh now handles both configuration and connectivity verification
 IFACE="${WIFI_IFACE:-wlan0}"
 
 if ! bash "$SCRIPTDIR/scripts/setup_wifi.sh" "$CONFIG_PATH" "$IFACE"; then
   sw_ret=$?
-  echo "Wifi setup failed (code: $sw_ret). Continuing startup, but network may be unavailable."
+  echo "WiFi setup failed (code: $sw_ret). Network unavailable."
   exit $sw_ret
 fi
 
-echo "Wifi setup completed; waiting for connectivity..."
-
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# Wait up to WIFI_WAIT seconds for interface to get IP and for internet connectivity
-WIFI_WAIT="${WIFI_WAIT:-120}"
-WIFI_POLL_INTERVAL=1
-elapsed=0
-connected=0
-
-while [ $elapsed -lt $WIFI_WAIT ]; do
-if command -v ip >/dev/null 2>&1 && ip addr show "$IFACE" 2>/dev/null | grep -q 'inet '; then
-    if command -v ping >/dev/null 2>&1 && ping -c1 -W1 8.8.8.8 >/dev/null 2>&1; then
-    connected=1
-    break
-    fi
-    if command -v curl >/dev/null 2>&1 && curl -fsS --max-time 3 http://clients3.google.com/generate_204 >/dev/null 2>&1; then
-    connected=1
-    break
-    fi
-fi
-sleep $WIFI_POLL_INTERVAL
-elapsed=$((elapsed + WIFI_POLL_INTERVAL))
-done
-
-if ! [ $connected -eq 1 ]; then
-  echo "WARNING: WiFi or internet not reachable after ${WIFI_WAIT}s. Retrying..."
-  exit 1
-fi
-
-echo "WiFi and internet reachable after ${elapsed}s."
+echo "WiFi setup completed with internet connectivity verified."
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Clone or update the project repository on the USB drive
