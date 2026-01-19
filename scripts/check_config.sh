@@ -41,7 +41,7 @@ while IFS= read -r _line || [ -n "$_line" ]; do
       done
 
       case "$key" in
-        WIFI_UUID)
+        WIFI_UUID) #upgrade this to use SSID terminology instead
           WIFI_UUID=$val
           ;;
         WIFI_PASSWORD)

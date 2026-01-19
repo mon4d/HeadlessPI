@@ -6,6 +6,74 @@ if [ -w /dev/tty1 ]; then
   exec > /dev/tty1 2>&1
 fi
 
+_shutdown_bin() {
+  if command -v shutdown >/dev/null 2>&1; then
+    command -v shutdown
+    return 0
+  fi
+  if [ -x /sbin/shutdown ]; then
+    echo "/sbin/shutdown"
+    return 0
+  fi
+  if [ -x /usr/sbin/shutdown ]; then
+    echo "/usr/sbin/shutdown"
+    return 0
+  fi
+  return 1
+}
+
+time_is_synchronized() {
+  if command -v timedatectl >/dev/null 2>&1; then
+    local synced
+    synced="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)"
+    if [ "$synced" = "yes" ]; then
+      return 0
+    fi
+  fi
+
+  if [ -f /run/systemd/timesync/synchronized ]; then
+    return 0
+  fi
+
+  return 1
+}
+
+wait_for_time_sync() {
+  local timeout_s=300
+  local poll_s=5
+  local waited=0
+
+  while [ $waited -lt $timeout_s ]; do
+    if time_is_synchronized; then
+      return 0
+    fi
+    sleep $poll_s
+    waited=$((waited + poll_s))
+  done
+
+  # Fallback after timeout: if year >= 2025, assume time is plausible
+  local year
+  year="$(date +%Y)"
+  if [ "$year" -ge 2025 ]; then
+    echo "Time sync not confirmed, but year=$year looks plausible; proceeding."
+    return 0
+  fi
+
+  return 1
+}
+
+schedule_daily_reboot_4am() {
+  local shutdown_cmd
+  if ! shutdown_cmd="$(_shutdown_bin)"; then
+    echo "WARNING: shutdown command not found; cannot schedule daily reboot."
+    return 0
+  fi
+
+  echo "Scheduling daily reboot at 04:00 (local time)..."
+  "$shutdown_cmd" -c >/dev/null 2>&1 || true
+  "$shutdown_cmd" -r 04:00 "HeadlessPI: System will automatically reboot at 04:00" >/dev/null 2>&1 || true
+}
+
 # startup.sh - Steuerungs-Skript, wird beim Boot ausgeführt
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -144,6 +212,48 @@ echo "Config found at '$CONFIG_PATH'. Validation passed."
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Check if system logging is enabled in the config and set up log file if needed
+SYSTEM_LOGGING=""
+if [ -f "$CONFIG_PATH" ]; then
+  while IFS= read -r _line || [ -n "$_line" ]; do
+    line="${_line%%#*}"
+    line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [ -z "$line" ] && continue
+
+    if [[ $line =~ ^([A-Za-z_][A-Za-z0-9_-]*)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      val="${BASH_REMATCH[2]}"
+      val="$(strip_surrounding_quotes "$val")"
+
+      if [ "$key" = "SYSTEM_LOGGING" ]; then
+        SYSTEM_LOGGING="$val"
+        break
+      fi
+    fi
+  done < "$CONFIG_PATH"
+fi
+
+# Enable logging if SYSTEM_LOGGING=TRUE (case-insensitive)
+if [[ "${SYSTEM_LOGGING^^}" == "TRUE" ]]; then
+  TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+  LOG_FILE="$MOUNT_POINT/startup_${TIMESTAMP}.log"
+  
+  echo "System logging enabled. Logging to: $LOG_FILE"
+  
+  # Clean up old log files (older than 2 days)
+  find "$MOUNT_POINT" -maxdepth 1 -name "startup_*.log" -type f -mtime +2 -delete 2>/dev/null || true
+  
+  # Redirect all subsequent output to both console and log file
+  exec > >(tee -a "$LOG_FILE") 2>&1
+  
+  echo "==================================="
+  echo "HeadlessPI Startup Log"
+  echo "Started: $(date)"
+  echo "==================================="
+fi
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Connect to WiFi using the config values
 # setup_wifi.sh now handles both configuration and connectivity verification
 IFACE="${WIFI_IFACE:-wlan0}"
@@ -154,8 +264,20 @@ if ! bash "$SCRIPTDIR/scripts/setup_wifi.sh" "$CONFIG_PATH" "$IFACE"; then
   exit $sw_ret
 fi
 
-
 echo "WiFi setup completed with internet connectivity verified."
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# With internet connectivity, wait briefly for time synchronization before scheduling a reboot at 04:00.
+# If time isn't synchronized after 5m / 300s reboot the system to try again.
+echo "Waiting for time synchronization (up to 180s) before scheduling 04:00 reboot..."
+if wait_for_time_sync; then
+  echo "Time synchronized; replacing fallback with daily 04:00 reboot schedule."
+  schedule_daily_reboot_4am
+else
+  echo "WARNING: Time not synchronized after 5 minutes; Rebooting to try again."
+  reboot
+fi
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # If the filesystem is read-write, we can try to update the startup scripts from the STARTUP_REPO.
 if [ -n "$STARTUP_REPO" ]; then
@@ -257,7 +379,7 @@ overlay_enabled() {
   return 1
 }
 
-if !overlay_enabled; then
+if ! overlay_enabled; then
   echo "Overlay not active; attempting to enable via raspi-config (non-interactive)..."
 
   if ! command -v raspi-config >/dev/null 2>&1; then
