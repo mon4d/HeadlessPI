@@ -180,6 +180,8 @@ fi
 NETWORK_COUNT=$(echo "$WIFI_CONFIGS" | wc -l | tr -d ' ')
 echo "Found $NETWORK_COUNT configured WiFi network(s)."
 
+sleep 10  # Wait a bit for the interface to be ready
+
 # Scan for available networks
 echo "Scanning for available WiFi networks on $IFACE..."
 AVAILABLE_NETWORKS=""
