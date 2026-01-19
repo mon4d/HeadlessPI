@@ -269,13 +269,14 @@ echo "WiFi setup completed with internet connectivity verified."
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # With internet connectivity, wait briefly for time synchronization before scheduling a reboot at 04:00.
 # If time isn't synchronized after 5m / 300s reboot the system to try again.
-echo "Waiting for time synchronization (up to 180s) before scheduling 04:00 reboot..."
+echo "Waiting for time synchronization (up to 5m / 300s) before scheduling 04:00 reboot..."
 if wait_for_time_sync; then
-  echo "Time synchronized; replacing fallback with daily 04:00 reboot schedule."
+  echo "Time synchronized; setting 04:00 reboot schedule."
   schedule_daily_reboot_4am
 else
   echo "WARNING: Time not synchronized after 5 minutes; Rebooting to try again."
   reboot
+  sleep 60
 fi
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -283,6 +284,7 @@ fi
 if [ -n "$STARTUP_REPO" ]; then
   if grep -qw "ro," /proc/mounts 2>/dev/null | awk '$2=="/" {print $3; exit}'; then
     echo "Filesystem is read-only; checking if there are any updates available."
+    git config --global --add safe.directory "$SCRIPTDIR"
     if git -C "$SCRIPTDIR" fetch --all --tags --prune && git -C "$SCRIPTDIR" remote show origin | grep -q 'local out of date'; then
       echo "Updates are available in '$STARTUP_REPO'"
       echo "Making filesystem writable and rebooting to apply updates..."
@@ -295,6 +297,7 @@ if [ -n "$STARTUP_REPO" ]; then
           sync
           sleep 2
           reboot
+          sleep 60
         else
           rc=$?
           echo "ERROR: raspi-config failed with exit code $rc. Cannot apply updates automatically."
@@ -307,6 +310,7 @@ if [ -n "$STARTUP_REPO" ]; then
     fi
   else
     echo "Updating startup scripts from repository: $STARTUP_REPO"
+    git config --global --add safe.directory "$SCRIPTDIR"
     if git -C "$SCRIPTDIR" fetch --all --tags --prune && git -C "$SCRIPTDIR" reset --hard origin/main; then
       echo "Startup scripts updated successfully."
     else
@@ -393,6 +397,7 @@ if ! overlay_enabled; then
       sync
       sleep 2
       reboot
+      sleep 60
     else
       rc=$?
       echo "WARNING: raspi-config failed with exit code $rc. Leaving system writable and continuing."
