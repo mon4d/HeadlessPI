@@ -285,7 +285,8 @@ fi
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # If the filesystem is read-write, we can try to update the startup scripts from the STARTUP_REPO.
 if [ -n "$STARTUP_REPO" ]; then
-  if grep -qw "ro," /proc/mounts 2>/dev/null | awk '$2=="/" {print $3; exit}'; then
+  if overlay_enabled; then
+    # Is in read-only mode via overlayfs
     echo "Filesystem is read-only; checking if there are any updates available."
     git config --global --add safe.directory "$SCRIPTDIR"
     if git -C "$SCRIPTDIR" fetch --all --tags --prune && git -C "$SCRIPTDIR" remote show origin | grep -q 'local out of date'; then
@@ -312,6 +313,7 @@ if [ -n "$STARTUP_REPO" ]; then
       echo "No updates available for startup scripts."
     fi
   else
+    # Filesystem is writable; attempt to update now
     echo "Updating startup scripts from repository: $STARTUP_REPO"
     git config --global --add safe.directory "$SCRIPTDIR"
     if git -C "$SCRIPTDIR" fetch --all --tags --prune && git -C "$SCRIPTDIR" reset --hard origin/main; then
@@ -324,6 +326,25 @@ else
   echo "No STARTUP_REPO defined; skipping startup script update."
 fi
 
+# Temporary set old versions of this script to write mode:
+# This is needed to get the raspberries running an old version with buggy read-mode detection to temporarily go into write mode, then restart and reapply updates.
+if [ -z "${VERSION:-}" ]; then
+  echo "Old startup script version detected (v$VERSION); setting filesystem to writable for update."
+  if command -v raspi-config >/dev/null 2>&1; then
+    echo "Running: sudo raspi-config nonint do_overlayfs 1" # in the raspberry config 0 is to enable overlay, 1 to disable
+    if sudo raspi-config nonint do_overlayfs 1; then
+      echo "raspi-config reported success; syncing before update..."
+      sync
+      sleep 2
+    else
+      rc=$?
+      echo "ERROR: raspi-config failed with exit code $rc. Cannot apply updates automatically."
+    fi
+  else
+    echo "ERROR: raspi-config not found; cannot enable write mode automatically."
+  fi
+fi
+# End of temporary write enable for old versions
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Clone or update the project repository on the USB drive
