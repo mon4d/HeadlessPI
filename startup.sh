@@ -326,26 +326,6 @@ else
   echo "No STARTUP_REPO defined; skipping startup script update."
 fi
 
-# Temporary set old versions of this script to write mode:
-# This is needed to get the raspberries running an old version with buggy read-mode detection to temporarily go into write mode, then restart and reapply updates.
-if [ -z "${VERSION:-}" ]; then
-  echo "Old startup script version detected (v$VERSION); setting filesystem to writable for update."
-  if command -v raspi-config >/dev/null 2>&1; then
-    echo "Running: sudo raspi-config nonint do_overlayfs 1" # in the raspberry config 0 is to enable overlay, 1 to disable
-    if sudo raspi-config nonint do_overlayfs 1; then
-      echo "raspi-config reported success; syncing before update..."
-      sync
-      sleep 2
-    else
-      rc=$?
-      echo "ERROR: raspi-config failed with exit code $rc. Cannot apply updates automatically."
-    fi
-  else
-    echo "ERROR: raspi-config not found; cannot enable write mode automatically."
-  fi
-fi
-# End of temporary write enable for old versions
-
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # Clone or update the project repository on the USB drive
 USB_PROJECT_DIR="$MOUNT_POINT/system"
