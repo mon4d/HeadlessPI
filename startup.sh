@@ -84,7 +84,7 @@ cd "$SCRIPTDIR" || exit 1
 echo ""
 echo " - - - - - - - - - - - - - - - - - - - "
 echo "Starting HeadlessPI startup sequence..."
-echo "Version: $VERSION"
+echo "Version: ${VERSION}"
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # First: Read the internal config file at $SCRIPTDIR/internal.config and write default values to environment variables
@@ -251,7 +251,7 @@ if [[ "${SYSTEM_LOGGING^^}" == "TRUE" ]]; then
   echo "==================================="
   echo "HeadlessPI Startup Log"
   echo "Started: $(date)"
-  echo "Version: $(VERSION)"
+  echo "Version: ${VERSION}"
   echo "==================================="
 fi
 
