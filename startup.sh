@@ -6,6 +6,8 @@ if [ -w /dev/tty1 ]; then
   exec > /dev/tty1 2>&1
 fi
 
+VERSION="0.5.0"
+
 _shutdown_bin() {
   if command -v shutdown >/dev/null 2>&1; then
     command -v shutdown
@@ -82,7 +84,7 @@ cd "$SCRIPTDIR" || exit 1
 echo ""
 echo " - - - - - - - - - - - - - - - - - - - "
 echo "Starting HeadlessPI startup sequence..."
-
+echo "Version: $VERSION"
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # First: Read the internal config file at $SCRIPTDIR/internal.config and write default values to environment variables
@@ -249,6 +251,7 @@ if [[ "${SYSTEM_LOGGING^^}" == "TRUE" ]]; then
   echo "==================================="
   echo "HeadlessPI Startup Log"
   echo "Started: $(date)"
+  echo "Version: $(VERSION)"
   echo "==================================="
 fi
 
