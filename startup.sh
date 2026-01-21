@@ -76,6 +76,20 @@ schedule_daily_reboot_4am() {
   "$shutdown_cmd" -r 04:00 "HeadlessPI: System will automatically reboot at 04:00" >/dev/null 2>&1 || true
 }
 
+overlay_enabled() {
+  # Return 0 if the overlay initramfs method is active (boot=overlay in cmdline or overlay mount on /)
+  if grep -q --fixed-strings "boot=overlay" /proc/cmdline 2>/dev/null; then
+    echo "found overlayfs indication: boot=overlay in /proc/cmdline"
+    return 0
+  fi
+  if awk '$2=="/" {print $3; exit}' /proc/mounts 2>/dev/null | grep -qw overlay; then
+    echo "found overlayfs indication: overlay mount on /"
+    return 0
+  fi
+  echo "found no overlayfs indication"
+  return 1
+}
+
 # startup.sh - Steuerungs-Skript, wird beim Boot ausgeführt
 SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -373,19 +387,6 @@ fi
 # If the raspberry is not in read-only mode, this is when we set it back to read-only
 # after all write operations are done and before launching the main script.
 # In any future starts the system will boot in read-only mode until we manually trigger the write mode again.
-overlay_enabled() {
-  # Return 0 if the overlay initramfs method is active (boot=overlay in cmdline or overlay mount on /)
-  if grep -q --fixed-strings "boot=overlay" /proc/cmdline 2>/dev/null; then
-    echo "found overlayfs indication: boot=overlay in /proc/cmdline"
-    return 0
-  fi
-  if awk '$2=="/" {print $3; exit}' /proc/mounts 2>/dev/null | grep -qw overlay; then
-    echo "found overlayfs indication: overlay mount on /"
-    return 0
-  fi
-  echo "found no overlayfs indication"
-  return 1
-}
 
 if ! overlay_enabled; then
   echo "Overlay not active; attempting to enable via raspi-config (non-interactive)..."
