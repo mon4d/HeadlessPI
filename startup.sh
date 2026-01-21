@@ -6,7 +6,7 @@ if [ -w /dev/tty1 ]; then
   exec > /dev/tty1 2>&1
 fi
 
-VERSION="0.5.0"
+VERSION="0.5.1"
 
 _shutdown_bin() {
   if command -v shutdown >/dev/null 2>&1; then
@@ -249,12 +249,12 @@ if [ -f "$CONFIG_PATH" ]; then
   done < "$CONFIG_PATH"
 fi
 
-# Enable logging if SYSTEM_LOGGING=TRUE (case-insensitive)
+# Enable logging if SYSTEM_LOGGING=TRUE and set up initial log file without timestamp before wifi and time sync
+# In future we could write logs from earlier steps to a temp file on the raspberry and later merge them into the final log file.
 if [[ "${SYSTEM_LOGGING^^}" == "TRUE" ]]; then
-  TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-  LOG_FILE="$MOUNT_POINT/startup_${TIMESTAMP}.log"
+  LOG_FILE="$MOUNT_POINT/startup_init.log"
   
-  echo "System logging enabled. Logging to: $LOG_FILE"
+  echo "Logging early operations of startup to: $LOG_FILE"
   
   # Clean up old log files (older than 2 days)
   find "$MOUNT_POINT" -maxdepth 1 -name "startup_*.log" -type f -mtime +2 -delete 2>/dev/null || true
@@ -263,8 +263,7 @@ if [[ "${SYSTEM_LOGGING^^}" == "TRUE" ]]; then
   exec > >(tee -a "$LOG_FILE") 2>&1
   
   echo "==================================="
-  echo "HeadlessPI Startup Log"
-  echo "Started: $(date)"
+  echo "HeadlessPI Startup ..."
   echo "Version: ${VERSION}"
   echo "==================================="
 fi
@@ -294,6 +293,23 @@ else
   echo "WARNING: Time not synchronized after 5 minutes; Rebooting to try again."
   reboot
   sleep 60
+fi
+
+# Start logging with correct timestamp after time sync
+if [[ "${SYSTEM_LOGGING^^}" == "TRUE" ]]; then
+  TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+  LOG_FILE="$MOUNT_POINT/startup_${TIMESTAMP}.log"
+  
+  echo "Logging system operation to: $LOG_FILE"
+  
+  # Redirect all subsequent output to both console and log file
+  exec > >(tee -a "$LOG_FILE") 2>&1
+  
+  echo "==================================="
+  echo "HeadlessPI Startup Log"
+  echo "Started: $(date)"
+  echo "Version: ${VERSION}"
+  echo "==================================="
 fi
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - -
